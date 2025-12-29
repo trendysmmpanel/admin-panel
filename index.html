@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SMM Admin Panel (Master)</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -10,41 +10,87 @@
 
     <style>
         :root { --bg: #1e1e2f; --card: #27293d; --primary: #e14eca; --success: #00f2c3; --danger: #fd5d93; --text: #ffffff; }
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding-bottom: 50px; }
+        
+        * { box-sizing: border-box; } /* Global reset for padding calculations */
+        
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding-bottom: 50px; -webkit-font-smoothing: antialiased; }
         .container { max-width: 1200px; margin: 0 auto; padding: 15px; }
         
-        h1, h2 { border-bottom: 2px solid var(--primary); padding-bottom: 10px; display: inline-block; margin-top: 30px; font-size: 1.5rem; }
+        h1, h2 { border-bottom: 2px solid var(--primary); padding-bottom: 10px; display: inline-block; margin-top: 30px; font-size: 1.5rem; word-break: break-word; }
         
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        /* Responsive Grid for Stats */
+        .grid-3 { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 15px; 
+            margin-bottom: 30px; 
+        }
+
         .stat-card { background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-left: 4px solid var(--primary); }
-        .stat-num { font-size: 1.8em; font-weight: bold; color: var(--text); margin-top: 10px; }
+        .stat-num { font-size: 1.8em; font-weight: bold; color: var(--text); margin-top: 10px; word-wrap: break-word; }
         
-        .section { background: var(--card); padding: 15px; margin-bottom: 30px; border-radius: 8px; border: 1px solid #333; }
+        .section { background: var(--card); padding: 15px; margin-bottom: 30px; border-radius: 8px; border: 1px solid #333; overflow: hidden; }
         
-        input, select { width: 100%; padding: 12px; margin: 5px 0 15px 0; background: #1e1e2f; border: 1px solid #444; color: white; box-sizing: border-box; border-radius: 4px; }
+        /* Form Elements */
+        input, select { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 5px 0 15px 0; 
+            background: #1e1e2f; 
+            border: 1px solid #444; 
+            color: white; 
+            border-radius: 4px; 
+            font-size: 16px; /* Prevents zoom on iPhone */
+        }
+        
         button { background: var(--primary); color: white; border: none; padding: 12px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s; white-space: nowrap; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button.green { background: var(--success); color: #000; }
         button.red { background: var(--danger); }
 
-        /* Mobile Table Scroll */
-        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; min-width: 600px; }
-        th, td { padding: 12px; border-bottom: 1px solid #444; text-align: left; }
-        th { background: #333; color: var(--primary); }
-        
+        /* Row Inputs Layout */
         .row-inputs { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .row-inputs > * { flex: 1; min-width: 200px; } /* Smart wrapping */
+        .row-inputs button { flex: 0 0 auto; } /* Button takes necessary space */
+
+        /* Table Responsive */
+        .table-responsive { 
+            overflow-x: auto; 
+            -webkit-overflow-scrolling: touch; 
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+        th, td { padding: 12px; border-bottom: 1px solid #444; text-align: left; }
+        th { background: #333; color: var(--primary); white-space: nowrap; }
+        
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; }
         .b-pending { background: orange; color: black; }
         .b-completed { background: var(--success); color: black; }
         .b-canceled { background: var(--danger); color: white; }
 
-        /* Mobile Specific Adjustments */
-        @media (max-width: 768px) {
-            .row-inputs { flex-direction: column; align-items: stretch; }
-            .row-inputs > * { width: 100% !important; margin-bottom: 5px; }
+        /* --- MOBILE RESPONSIVE MEDIA QUERIES --- */
+        @media (max-width: 900px) {
+            .grid-3 { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 600px) {
+            .grid-3 { grid-template-columns: 1fr; } /* Stack stats */
+            
+            .row-inputs { flex-direction: column; align-items: stretch; gap: 5px; }
+            .row-inputs > * { width: 100% !important; margin-bottom: 5px; flex: auto; }
+            
             input, select { margin-bottom: 10px; }
+            button { width: 100%; margin-top: 5px; }
+
             h1 { font-size: 1.4rem; margin-top: 15px; }
+            h2 { font-size: 1.2rem; }
+            
+            .container { padding: 10px; }
+            .stat-card { padding: 15px; }
+            
+            /* Specific fix for file input layout */
+            #qr-file { padding: 10px; background: transparent; border: none; }
         }
     </style>
 </head>
@@ -72,7 +118,7 @@
         <h2>⚙️ Site Settings</h2>
         <p style="font-size:13px; color:#aaa;">Set the "Base" number. Total displayed to users will be: <b>Base + Real Orders</b>.</p>
         <div class="row-inputs">
-            <div style="flex:1">
+            <div style="flex:2;">
                 <label>Fake Base Order Count</label>
                 <input type="number" id="fake-count" placeholder="e.g. 50000">
             </div>
