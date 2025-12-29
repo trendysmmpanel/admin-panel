@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMM Admin Panel (Master)</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
+    <style>
+        :root { --bg: #1e1e2f; --card: #27293d; --primary: #e14eca; --success: #00f2c3; --danger: #fd5d93; --text: #ffffff; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding-bottom: 50px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 15px; }
+        
+        h1, h2 { border-bottom: 2px solid var(--primary); padding-bottom: 10px; display: inline-block; margin-top: 30px; font-size: 1.5rem; }
+        
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .stat-card { background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-left: 4px solid var(--primary); }
+        .stat-num { font-size: 1.8em; font-weight: bold; color: var(--text); margin-top: 10px; }
+        
+        .section { background: var(--card); padding: 15px; margin-bottom: 30px; border-radius: 8px; border: 1px solid #333; }
+        
+        input, select { width: 100%; padding: 12px; margin: 5px 0 15px 0; background: #1e1e2f; border: 1px solid #444; color: white; box-sizing: border-box; border-radius: 4px; }
+        button { background: var(--primary); color: white; border: none; padding: 12px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s; white-space: nowrap; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button.green { background: var(--success); color: #000; }
+        button.red { background: var(--danger); }
+
+        /* Mobile Table Scroll */
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; min-width: 600px; }
+        th, td { padding: 12px; border-bottom: 1px solid #444; text-align: left; }
+        th { background: #333; color: var(--primary); }
+        
+        .row-inputs { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .b-pending { background: orange; color: black; }
+        .b-completed { background: var(--success); color: black; }
+        .b-canceled { background: var(--danger); color: white; }
+
+        /* Mobile Specific Adjustments */
+        @media (max-width: 768px) {
+            .row-inputs { flex-direction: column; align-items: stretch; }
+            .row-inputs > * { width: 100% !important; margin-bottom: 5px; }
+            input, select { margin-bottom: 10px; }
+            h1 { font-size: 1.4rem; margin-top: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🛠 Admin Dashboard</h1>
+
+    <div class="grid-3">
+        <div class="stat-card">
+            <div>Total Users</div>
+            <div class="stat-num" id="count-users">0</div>
+        </div>
+        <div class="stat-card">
+            <div>Total Orders (Real)</div>
+            <div class="stat-num" id="count-orders">0</div>
+        </div>
+        <div class="stat-card">
+            <div>Pending Payment Requests</div>
+            <div class="stat-num" id="count-pay-req" style="color:orange">0</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>⚙️ Site Settings</h2>
+        <p style="font-size:13px; color:#aaa;">Set the "Base" number. Total displayed to users will be: <b>Base + Real Orders</b>.</p>
+        <div class="row-inputs">
+            <div style="flex:1">
+                <label>Fake Base Order Count</label>
+                <input type="number" id="fake-count" placeholder="e.g. 50000">
+            </div>
+            <button onclick="saveSettings()">SAVE SETTINGS</button>
+        </div>
+        
+        <div style="margin-top: 20px; border-top: 1px solid #444; padding-top: 15px;">
+             <h3>📷 Update QR Code</h3>
+             <div class="row-inputs">
+                 <input type="file" id="qr-file">
+                 <button onclick="uploadQR()">UPLOAD NEW QR</button>
+             </div>
+             <p id="qr-status" style="color: var(--success);"></p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>💸 Payment Requests</h2>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>User</th><th>Amount</th><th>Txn ID</th><th>Date</th><th>Action</th></tr></thead>
+                <tbody id="payments-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>💰 Manual Fund Addition</h2>
+        <div class="row-inputs">
+            <input type="text" id="coin-username" placeholder="Exact Username">
+            <input type="number" id="coin-amount" placeholder="Amount (₹)">
+            <button onclick="findAndUpdateBalance()">ADD BALANCE</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>➕ Services Manager</h2>
+        <div class="row-inputs">
+            <input type="text" id="svc-name" placeholder="Service Name" style="flex:2">
+            <select id="svc-cat" style="flex:1">
+                <option value="Instagram">Instagram</option>
+                <option value="YouTube">YouTube</option>
+                <option value="Telegram">Telegram</option>
+                <option value="Facebook">Facebook</option>
+            </select>
+            <input type="number" id="svc-price" placeholder="₹ Price / 1k" style="flex:1">
+            <div style="display:flex; gap:10px; width:100%;">
+                <input type="number" id="svc-min" placeholder="Min" style="flex:1">
+                <input type="number" id="svc-max" placeholder="Max" style="flex:1">
+            </div>
+            <button onclick="addService()">ADD</button>
+        </div>
+        
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>Cat</th><th>Name</th><th>₹/1k</th><th>Action</th></tr></thead>
+                <tbody id="services-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📦 Recent Orders</h2>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>ID</th><th>User</th><th>Service</th><th>Qty</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody id="orders-table"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCX5qpT_ytgJjRk21-VWZ-Ndhbq0hhjXYo",
+        authDomain: "fir-integration-61a1f.firebaseapp.com",
+        databaseURL: "https://fir-integration-61a1f-default-rtdb.firebaseio.com",
+        projectId: "fir-integration-61a1f",
+        storageBucket: "fir-integration-61a1f.firebasestorage.app",
+        messagingSenderId: "178334018866",
+        appId: "1:178334018866:web:ef78bc307549639d0ebb2b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const storage = firebase.storage();
+
+    // 1. Load Stats & Settings
+    db.ref('users').on('value', snap => document.getElementById('count-users').innerText = snap.numChildren());
+    
+    db.ref('settings/fakeCount').on('value', snap => {
+        if(snap.exists()) document.getElementById('fake-count').value = snap.val();
+    });
+
+    function saveSettings() {
+        const val = parseInt(document.getElementById('fake-count').value) || 0;
+        db.ref('settings/fakeCount').set(val);
+        alert("Settings Saved!");
+    }
+
+    // 2. Load Payment Requests
+    db.ref('payments').on('value', snap => {
+        const list = document.getElementById('payments-table');
+        list.innerHTML = '';
+        let pendingCount = 0;
+        
+        if(snap.exists()) {
+            const data = snap.val();
+            Object.keys(data).forEach(key => {
+                const p = data[key];
+                if(p.status === 'Pending') {
+                    pendingCount++;
+                    list.innerHTML += `
+                        <tr>
+                            <td>${p.username || 'Unknown'}</td>
+                            <td style="color:var(--success); font-weight:bold;">₹${p.amount}</td>
+                            <td>${p.txnId}</td>
+                            <td>${new Date(p.date).toLocaleDateString()}</td>
+                            <td>
+                                <button class="green" style="padding:5px 10px" onclick="processPayment('${key}', '${p.userId}', ${p.amount}, 'Completed')">✔</button>
+                                <button class="red" style="padding:5px 10px" onclick="processPayment('${key}', '${p.userId}', 0, 'Rejected')">✖</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+        }
+        document.getElementById('count-pay-req').innerText = pendingCount;
+        if(pendingCount === 0) list.innerHTML = '<tr><td colspan="5">No pending requests</td></tr>';
+    });
+
+    function processPayment(paymentKey, userId, amount, status) {
+        if(!confirm(`Mark this payment as ${status}?`)) return;
+
+        const updates = {};
+        updates[`payments/${paymentKey}/status`] = status;
+        
+        if(status === 'Completed') {
+            // Add funds to user
+            db.ref(`users/${userId}/coins`).transaction(current => (current || 0) + amount);
+        }
+
+        db.ref().update(updates);
+    }
+
+    // 3. Services Management
+    function addService() {
+        const name = document.getElementById('svc-name').value;
+        const cat = document.getElementById('svc-cat').value;
+        const price = parseFloat(document.getElementById('svc-price').value);
+        const min = parseInt(document.getElementById('svc-min').value);
+        const max = parseInt(document.getElementById('svc-max').value);
+        if(!name || !price) return;
+        db.ref('services').push({ name, category: cat, price, min, max, active: true });
+        document.getElementById('svc-name').value = '';
+    }
+
+    db.ref('services').on('value', snap => {
+        const list = document.getElementById('services-table');
+        list.innerHTML = '';
+        snap.forEach(c => {
+            const s = c.val();
+            list.innerHTML += `<tr><td>${s.category}</td><td>${s.name}</td><td>₹${s.price}</td><td><button class="red" style="padding:5px 10px" onclick="db.ref('services/${c.key}').remove()">X</button></td></tr>`;
+        });
+    });
+
+    // 4. Orders Management
+    db.ref('orders').on('value', snap => {
+        const list = document.getElementById('orders-table');
+        list.innerHTML = '';
+        const data = snap.val();
+        if(data) {
+            const orders = Object.keys(data).map(k => ({key: k, ...data[k]})).reverse();
+            document.getElementById('count-orders').innerText = orders.length; // Real count
+            
+            // Show only last 20 orders for performance
+            orders.slice(0, 20).forEach(o => {
+                let badgeClass = 'b-pending';
+                if(o.status === 'Completed') badgeClass = 'b-completed';
+                if(o.status === 'Canceled') badgeClass = 'b-canceled';
+
+                list.innerHTML += `
+                    <tr>
+                        <td>${o.key.substr(-4)}</td>
+                        <td style="font-size:10px">${o.userId}</td>
+                        <td>${o.serviceName}</td>
+                        <td>${o.quantity}</td>
+                        <td>₹${o.price}</td>
+                        <td><span class="badge ${badgeClass}">${o.status}</span></td>
+                        <td>
+                            <select onchange="db.ref('orders/${o.key}').update({status: this.value})" style="padding:5px; margin:0; height:auto;">
+                                <option value="" disabled selected>Edit</option>
+                                <option value="Processing">Processing</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Canceled">Canceled</option>
+                            </select>
+                        </td>
+                    </tr>`;
+            });
+        }
+    });
+
+    // 5. Manual Balance
+    function findAndUpdateBalance() {
+        const username = document.getElementById('coin-username').value.trim().toLowerCase();
+        const amount = parseFloat(document.getElementById('coin-amount').value);
+        
+        if(!username || !amount) return alert("Enter Username and Amount");
+
+        db.ref('users').orderByChild('username').equalTo(username).once('value', snap => {
+            if(snap.exists()) {
+                let userKey = Object.keys(snap.val())[0];
+                db.ref(`users/${userKey}/coins`).transaction(curr => (curr || 0) + amount);
+                alert(`Added ₹${amount} to ${username}`);
+            } else {
+                alert("User not found!");
+            }
+        });
+    }
+
+    // 6. QR Upload
+    function uploadQR() {
+        const file = document.getElementById('qr-file').files[0];
+        if(!file) return;
+        const ref = storage.ref('qrcodes/' + file.name);
+        ref.put(file).then(s => s.ref.getDownloadURL()).then(url => {
+            db.ref('settings/qrCodeUrl').set(url);
+            document.getElementById('qr-status').innerText = "QR Updated Successfully!";
+        });
+    }
+</script>
+</body>
+</html>
