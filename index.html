@@ -11,12 +11,25 @@
     <style>
         :root { --bg: #1e1e2f; --card: #27293d; --primary: #e14eca; --success: #00f2c3; --danger: #fd5d93; --text: #ffffff; }
         
-        * { box-sizing: border-box; } /* Global reset for padding calculations */
+        * { box-sizing: border-box; } 
         
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding-bottom: 50px; -webkit-font-smoothing: antialiased; }
         .container { max-width: 1200px; margin: 0 auto; padding: 15px; }
         
         h1, h2 { border-bottom: 2px solid var(--primary); padding-bottom: 10px; display: inline-block; margin-top: 30px; font-size: 1.5rem; word-break: break-word; }
+        
+        /* Login Overlay Styles */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg); z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .login-box {
+            background: var(--card); padding: 40px; border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 400px;
+            border-top: 5px solid var(--primary); text-align: center;
+        }
+        .login-box h2 { border: none; margin-top: 0; }
         
         /* Responsive Grid for Stats */
         .grid-3 { 
@@ -40,7 +53,7 @@
             border: 1px solid #444; 
             color: white; 
             border-radius: 4px; 
-            font-size: 16px; /* Prevents zoom on iPhone */
+            font-size: 16px; 
         }
         
         button { background: var(--primary); color: white; border: none; padding: 12px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s; white-space: nowrap; }
@@ -50,8 +63,8 @@
 
         /* Row Inputs Layout */
         .row-inputs { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .row-inputs > * { flex: 1; min-width: 200px; } /* Smart wrapping */
-        .row-inputs button { flex: 0 0 auto; } /* Button takes necessary space */
+        .row-inputs > * { flex: 1; min-width: 200px; } 
+        .row-inputs button { flex: 0 0 auto; } 
 
         /* Table Responsive */
         .table-responsive { 
@@ -69,13 +82,12 @@
         .b-completed { background: var(--success); color: black; }
         .b-canceled { background: var(--danger); color: white; }
 
-        /* --- MOBILE RESPONSIVE MEDIA QUERIES --- */
         @media (max-width: 900px) {
             .grid-3 { grid-template-columns: repeat(2, 1fr); }
         }
 
         @media (max-width: 600px) {
-            .grid-3 { grid-template-columns: 1fr; } /* Stack stats */
+            .grid-3 { grid-template-columns: 1fr; } 
             
             .row-inputs { flex-direction: column; align-items: stretch; gap: 5px; }
             .row-inputs > * { width: 100% !important; margin-bottom: 5px; flex: auto; }
@@ -89,15 +101,33 @@
             .container { padding: 10px; }
             .stat-card { padding: 15px; }
             
-            /* Specific fix for file input layout */
             #qr-file { padding: 10px; background: transparent; border: none; }
         }
+        
+        /* Dashboard hidden initially */
+        #dashboard-content { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>🛠 Admin Dashboard</h1>
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>🔒 Admin Access</h2>
+        <p style="color:#aaa; font-size:13px; margin-bottom:20px;">Please login to manage the panel.</p>
+        <form id="adminLoginForm">
+            <input type="text" id="admin-user" placeholder="Username" required>
+            <input type="password" id="admin-pass" placeholder="Password" required>
+            <button type="submit" style="width:100%; margin-top:10px;">LOGIN TO DASHBOARD</button>
+        </form>
+        <p id="login-msg" style="margin-top:15px; font-size:12px;"></p>
+    </div>
+</div>
+
+<div class="container" id="dashboard-content">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1>🛠 Admin Dashboard</h1>
+        <button onclick="adminLogout()" class="red" style="padding:8px 15px; font-size:12px;">LOGOUT</button>
+    </div>
 
     <div class="grid-3">
         <div class="stat-card">
@@ -163,18 +193,20 @@
                 <option value="YouTube">YouTube</option>
                 <option value="Telegram">Telegram</option>
                 <option value="Facebook">Facebook</option>
+                <option value="Twitter">Twitter</option>
+                <option value="Other">Other</option>
             </select>
             <input type="number" id="svc-price" placeholder="₹ Price / 1k" style="flex:1">
             <div style="display:flex; gap:10px; width:100%;">
                 <input type="number" id="svc-min" placeholder="Min" style="flex:1">
                 <input type="number" id="svc-max" placeholder="Max" style="flex:1">
             </div>
-            <button onclick="addService()">ADD</button>
+            <button onclick="addService()">ADD SERVICE</button>
         </div>
         
         <div class="table-responsive">
             <table>
-                <thead><tr><th>Cat</th><th>Name</th><th>₹/1k</th><th>Action</th></tr></thead>
+                <thead><tr><th>Cat</th><th>Name</th><th>Min/Max</th><th>₹/1k</th><th>Action</th></tr></thead>
                 <tbody id="services-table"></tbody>
             </table>
         </div>
@@ -192,62 +224,181 @@
 </div>
 
 <script>
+    // --- UPDATED CONFIGURATION ---
     const firebaseConfig = {
-        apiKey: "AIzaSyCX5qpT_ytgJjRk21-VWZ-Ndhbq0hhjXYo",
-        authDomain: "fir-integration-61a1f.firebaseapp.com",
-        databaseURL: "https://fir-integration-61a1f-default-rtdb.firebaseio.com",
-        projectId: "fir-integration-61a1f",
-        storageBucket: "fir-integration-61a1f.firebasestorage.app",
-        messagingSenderId: "178334018866",
-        appId: "1:178334018866:web:ef78bc307549639d0ebb2b"
+        apiKey: "AIzaSyDwmaZ_HGBR7eyOnPgLGO6grxVMR_cUM04",
+        authDomain: "trendysmmpanel.firebaseapp.com",
+        databaseURL: "https://trendysmmpanel-default-rtdb.firebaseio.com",
+        projectId: "trendysmmpanel",
+        storageBucket: "trendysmmpanel.firebasestorage.app",
+        messagingSenderId: "1038373553958",
+        appId: "1:1038373553958:web:c637432468b71e7266e3e7"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const storage = firebase.storage();
 
-    // 1. Load Stats & Settings
-    db.ref('users').on('value', snap => document.getElementById('count-users').innerText = snap.numChildren());
-    
-    db.ref('settings/fakeCount').on('value', snap => {
-        if(snap.exists()) document.getElementById('fake-count').value = snap.val();
+    // --- ADMIN LOGIN LOGIC ---
+    const loginOverlay = document.getElementById('login-overlay');
+    const dashboardContent = document.getElementById('dashboard-content');
+    const loginForm = document.getElementById('adminLoginForm');
+    const loginMsg = document.getElementById('login-msg');
+
+    // Check Session on Load
+    if (sessionStorage.getItem('admin_session') === 'active') {
+        showDashboard();
+    }
+
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const u = document.getElementById('admin-user').value.trim();
+        const p = document.getElementById('admin-pass').value.trim();
+
+        loginMsg.innerText = "Checking credentials...";
+        loginMsg.style.color = "orange";
+
+        // Check credentials against Firebase Database
+        const authRef = db.ref('admin_auth');
+        authRef.once('value', snapshot => {
+            if (!snapshot.exists()) {
+                // FIRST TIME SETUP: If no admin exists, create default
+                authRef.set({ username: 'admin', password: 'admin123' });
+                if (u === 'admin' && p === 'admin123') {
+                    loginSuccess();
+                } else {
+                    loginMsg.innerText = "New System detected. Default User: admin, Pass: admin123";
+                    loginMsg.style.color = "var(--primary)";
+                }
+            } else {
+                // VERIFY CREDENTIALS
+                const creds = snapshot.val();
+                if (u === creds.username && p === creds.password) {
+                    loginSuccess();
+                } else {
+                    loginMsg.innerText = "Invalid Username or Password";
+                    loginMsg.style.color = "var(--danger)";
+                }
+            }
+        });
     });
 
+    function loginSuccess() {
+        sessionStorage.setItem('admin_session', 'active');
+        showDashboard();
+    }
+
+    function showDashboard() {
+        loginOverlay.style.display = 'none';
+        dashboardContent.style.display = 'block';
+        initAdminPanel(); // Start loading data only after login
+    }
+
+    function adminLogout() {
+        sessionStorage.removeItem('admin_session');
+        location.reload();
+    }
+
+    // --- MAIN ADMIN LOGIC (Wrapped in init function) ---
+    function initAdminPanel() {
+        // 1. Load Stats & Settings
+        db.ref('users').on('value', snap => document.getElementById('count-users').innerText = snap.numChildren());
+        
+        db.ref('settings/fakeCount').on('value', snap => {
+            if(snap.exists()) document.getElementById('fake-count').value = snap.val();
+        });
+
+        // 2. Load Payment Requests
+        db.ref('payments').on('value', snap => {
+            const list = document.getElementById('payments-table');
+            list.innerHTML = '';
+            let pendingCount = 0;
+            
+            if(snap.exists()) {
+                const data = snap.val();
+                Object.keys(data).forEach(key => {
+                    const p = data[key];
+                    if(p.status === 'Pending') {
+                        pendingCount++;
+                        list.innerHTML += `
+                            <tr>
+                                <td>${p.username || 'Unknown'}</td>
+                                <td style="color:var(--success); font-weight:bold;">₹${p.amount}</td>
+                                <td>${p.txnId}</td>
+                                <td>${new Date(p.date).toLocaleDateString()}</td>
+                                <td>
+                                    <button class="green" style="padding:5px 10px" onclick="processPayment('${key}', '${p.userId}', ${p.amount}, 'Completed')">✔</button>
+                                    <button class="red" style="padding:5px 10px" onclick="processPayment('${key}', '${p.userId}', 0, 'Rejected')">✖</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                });
+            }
+            document.getElementById('count-pay-req').innerText = pendingCount;
+            if(pendingCount === 0) list.innerHTML = '<tr><td colspan="5">No pending requests</td></tr>';
+        });
+
+        // 3. Services Management
+        db.ref('services').on('value', snap => {
+            const list = document.getElementById('services-table');
+            list.innerHTML = '';
+            if(snap.exists()){
+                snap.forEach(c => {
+                    const s = c.val();
+                    list.innerHTML += `
+                    <tr>
+                        <td><span class="badge" style="background:#444; color:white">${s.category}</span></td>
+                        <td>${s.name}</td>
+                        <td style="font-size:11px; color:#aaa;">${s.min} - ${s.max}</td>
+                        <td style="color:var(--success); font-weight:bold;">₹${s.price}</td>
+                        <td><button class="red" style="padding:5px 10px" onclick="deleteService('${c.key}')">X</button></td>
+                    </tr>`;
+                });
+            }
+        });
+
+        // 4. Orders Management
+        db.ref('orders').on('value', snap => {
+            const list = document.getElementById('orders-table');
+            list.innerHTML = '';
+            const data = snap.val();
+            if(data) {
+                const orders = Object.keys(data).map(k => ({key: k, ...data[k]})).reverse();
+                document.getElementById('count-orders').innerText = orders.length; 
+                
+                orders.slice(0, 20).forEach(o => {
+                    let badgeClass = 'b-pending';
+                    if(o.status === 'Completed') badgeClass = 'b-completed';
+                    if(o.status === 'Canceled') badgeClass = 'b-canceled';
+
+                    list.innerHTML += `
+                        <tr>
+                            <td>${o.key.substr(-4)}</td>
+                            <td style="font-size:10px">${o.userId}</td>
+                            <td style="font-size:11px;">${o.serviceName}</td>
+                            <td>${o.quantity}</td>
+                            <td>₹${o.price}</td>
+                            <td><span class="badge ${badgeClass}">${o.status}</span></td>
+                            <td>
+                                <select onchange="updateOrderStatus('${o.key}', this.value)" style="padding:5px; margin:0; height:auto;">
+                                    <option value="" disabled selected>Edit</option>
+                                    <option value="Processing">Processing</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Canceled">Canceled</option>
+                                </select>
+                            </td>
+                        </tr>`;
+                });
+            }
+        });
+    }
+
+    // --- GLOBAL ACTIONS (Outside Init) ---
     function saveSettings() {
         const val = parseInt(document.getElementById('fake-count').value) || 0;
         db.ref('settings/fakeCount').set(val);
         alert("Settings Saved!");
     }
-
-    // 2. Load Payment Requests
-    db.ref('payments').on('value', snap => {
-        const list = document.getElementById('payments-table');
-        list.innerHTML = '';
-        let pendingCount = 0;
-        
-        if(snap.exists()) {
-            const data = snap.val();
-            Object.keys(data).forEach(key => {
-                const p = data[key];
-                if(p.status === 'Pending') {
-                    pendingCount++;
-                    list.innerHTML += `
-                        <tr>
-                            <td>${p.username || 'Unknown'}</td>
-                            <td style="color:var(--success); font-weight:bold;">₹${p.amount}</td>
-                            <td>${p.txnId}</td>
-                            <td>${new Date(p.date).toLocaleDateString()}</td>
-                            <td>
-                                <button class="green" style="padding:5px 10px" onclick="processPayment('${key}', '${p.userId}', ${p.amount}, 'Completed')">✔</button>
-                                <button class="red" style="padding:5px 10px" onclick="processPayment('${key}', '${p.userId}', 0, 'Rejected')">✖</button>
-                            </td>
-                        </tr>
-                    `;
-                }
-            });
-        }
-        document.getElementById('count-pay-req').innerText = pendingCount;
-        if(pendingCount === 0) list.innerHTML = '<tr><td colspan="5">No pending requests</td></tr>';
-    });
 
     function processPayment(paymentKey, userId, amount, status) {
         if(!confirm(`Mark this payment as ${status}?`)) return;
@@ -256,71 +407,60 @@
         updates[`payments/${paymentKey}/status`] = status;
         
         if(status === 'Completed') {
-            // Add funds to user
             db.ref(`users/${userId}/coins`).transaction(current => (current || 0) + amount);
         }
 
         db.ref().update(updates);
     }
 
-    // 3. Services Management
     function addService() {
-        const name = document.getElementById('svc-name').value;
-        const cat = document.getElementById('svc-cat').value;
-        const price = parseFloat(document.getElementById('svc-price').value);
-        const min = parseInt(document.getElementById('svc-min').value);
-        const max = parseInt(document.getElementById('svc-max').value);
-        if(!name || !price) return;
-        db.ref('services').push({ name, category: cat, price, min, max, active: true });
-        document.getElementById('svc-name').value = '';
+        const nameInput = document.getElementById('svc-name');
+        const catInput = document.getElementById('svc-cat');
+        const priceInput = document.getElementById('svc-price');
+        const minInput = document.getElementById('svc-min');
+        const maxInput = document.getElementById('svc-max');
+
+        const name = nameInput.value.trim();
+        const cat = catInput.value;
+        const price = parseFloat(priceInput.value);
+        const min = parseInt(minInput.value);
+        const max = parseInt(maxInput.value);
+
+        if(!name) { alert("Please enter a Service Name."); return; }
+        if(isNaN(price)) { alert("Please enter a valid Price."); return; }
+        if(isNaN(min)) { alert("Please enter a valid Minimum Quantity."); return; }
+        if(isNaN(max)) { alert("Please enter a valid Maximum Quantity."); return; }
+
+        db.ref('services').push({ 
+            name: name, 
+            category: cat, 
+            price: price, 
+            min: min, 
+            max: max, 
+            active: true 
+        }, (error) => {
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert("Service Added Successfully! ✅");
+                nameInput.value = '';
+                priceInput.value = '';
+                minInput.value = '';
+                maxInput.value = '';
+            }
+        });
     }
 
-    db.ref('services').on('value', snap => {
-        const list = document.getElementById('services-table');
-        list.innerHTML = '';
-        snap.forEach(c => {
-            const s = c.val();
-            list.innerHTML += `<tr><td>${s.category}</td><td>${s.name}</td><td>₹${s.price}</td><td><button class="red" style="padding:5px 10px" onclick="db.ref('services/${c.key}').remove()">X</button></td></tr>`;
-        });
-    });
-
-    // 4. Orders Management
-    db.ref('orders').on('value', snap => {
-        const list = document.getElementById('orders-table');
-        list.innerHTML = '';
-        const data = snap.val();
-        if(data) {
-            const orders = Object.keys(data).map(k => ({key: k, ...data[k]})).reverse();
-            document.getElementById('count-orders').innerText = orders.length; // Real count
-            
-            // Show only last 20 orders for performance
-            orders.slice(0, 20).forEach(o => {
-                let badgeClass = 'b-pending';
-                if(o.status === 'Completed') badgeClass = 'b-completed';
-                if(o.status === 'Canceled') badgeClass = 'b-canceled';
-
-                list.innerHTML += `
-                    <tr>
-                        <td>${o.key.substr(-4)}</td>
-                        <td style="font-size:10px">${o.userId}</td>
-                        <td>${o.serviceName}</td>
-                        <td>${o.quantity}</td>
-                        <td>₹${o.price}</td>
-                        <td><span class="badge ${badgeClass}">${o.status}</span></td>
-                        <td>
-                            <select onchange="db.ref('orders/${o.key}').update({status: this.value})" style="padding:5px; margin:0; height:auto;">
-                                <option value="" disabled selected>Edit</option>
-                                <option value="Processing">Processing</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Canceled">Canceled</option>
-                            </select>
-                        </td>
-                    </tr>`;
-            });
+    function deleteService(key) {
+        if(confirm("Are you sure you want to delete this service?")) {
+            db.ref('services/' + key).remove();
         }
-    });
+    }
 
-    // 5. Manual Balance
+    function updateOrderStatus(key, status) {
+        db.ref('orders/' + key).update({status: status});
+    }
+
     function findAndUpdateBalance() {
         const username = document.getElementById('coin-username').value.trim().toLowerCase();
         const amount = parseFloat(document.getElementById('coin-amount').value);
@@ -332,20 +472,24 @@
                 let userKey = Object.keys(snap.val())[0];
                 db.ref(`users/${userKey}/coins`).transaction(curr => (curr || 0) + amount);
                 alert(`Added ₹${amount} to ${username}`);
+                document.getElementById('coin-username').value = '';
+                document.getElementById('coin-amount').value = '';
             } else {
                 alert("User not found!");
             }
         });
     }
 
-    // 6. QR Upload
     function uploadQR() {
         const file = document.getElementById('qr-file').files[0];
-        if(!file) return;
+        if(!file) return alert("Please select a file first");
+        
         const ref = storage.ref('qrcodes/' + file.name);
         ref.put(file).then(s => s.ref.getDownloadURL()).then(url => {
             db.ref('settings/qrCodeUrl').set(url);
             document.getElementById('qr-status').innerText = "QR Updated Successfully!";
+        }).catch(err => {
+            alert("Upload failed: " + err.message);
         });
     }
 </script>
